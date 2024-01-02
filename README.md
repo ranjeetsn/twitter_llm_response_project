@@ -1,4 +1,4 @@
-# twitter_llm_response_project
+# Using LLM Agent to respond to grievances on Twitter
 Fine tuning LLM on customer support and airline twitter customer grievances data to respond to any customer grievances on twitter using kafka and spark
 
 ## Key Technologies for LLM

@@ -25,6 +25,6 @@ We use a Directed Acyclic graph concept to design our customer support chatbot. 
 ### Edges
 - Serve as Validation gateway. They decide if the user can advance to the next step
 
-!alt
+![alt text](https://github.com/ranjeetsn/twitter_llm_response_project/blob/main/readme_files/customer_support_app_wokflow.png)
 
 

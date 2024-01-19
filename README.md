@@ -3,6 +3,8 @@
 - We use LLM to generate a new generation of Business Process Management suites
 
 ## Key Technologies for LLM
+- Kafka Producer for tweet streaming
+- Tweepy for twitter api
 - LLM Chains with OpenAI Model
 - Custom Output Parsers to validate steps
 - ReACT Prompt Engineering Technique

@@ -25,4 +25,6 @@ We use a Directed Acyclic graph concept to design our customer support chatbot. 
 ### Edges
 - Serve as Validation gateway. They decide if the user can advance to the next step
 
+!alt
+
 

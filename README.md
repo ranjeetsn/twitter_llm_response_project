@@ -11,6 +11,7 @@
 - Retrieval Augmented Generation
 - Speech to Text with Whisper AI
 - Database and API LLM Integrations
+- Streamlit Application for concept prototype phase
 
 ## Business Process Management
 A BPM or Business Process management can be represented as a Directed Acyclic Graph (DAG), as we go from an input to an output.

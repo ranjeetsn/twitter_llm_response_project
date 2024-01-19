@@ -30,6 +30,6 @@ We use a Directed Acyclic graph concept to design our customer support chatbot. 
 ![alt text](https://github.com/ranjeetsn/twitter_llm_response_project/blob/main/readme_files/customer_support_app_wokflow.png)
 
 - The DAG for the customer support flow is as shown below:
-! [alt text] (https://github.com/ranjeetsn/twitter_llm_response_project/blob/main/readme_files/dag_workflow.png)
+![alt text](https://github.com/ranjeetsn/twitter_llm_response_project/blob/main/readme_files/dag_workflow.png)
 
 

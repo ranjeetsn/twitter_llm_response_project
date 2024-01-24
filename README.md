@@ -3,12 +3,15 @@
 - We use LLM to generate a new generation of Business Process Management suites
 
 ## Key Technologies for LLM
+- Kafka Producer for tweet streaming
+- Tweepy for twitter api
 - LLM Chains with OpenAI Model
 - Custom Output Parsers to validate steps
 - ReACT Prompt Engineering Technique
 - Retrieval Augmented Generation
 - Speech to Text with Whisper AI
 - Database and API LLM Integrations
+- Streamlit Application for concept prototype phase
 
 ## Business Process Management
 A BPM or Business Process management can be represented as a Directed Acyclic Graph (DAG), as we go from an input to an output.
@@ -22,5 +25,12 @@ We use a Directed Acyclic graph concept to design our customer support chatbot. 
 - They are conversational checkpoints where user and agent interact
 ### Edges
 - Serve as Validation gateway. They decide if the user can advance to the next step
+
+### Customer Support Workflow
+- Customer support process is made up of different steps usually performed by different agents
+![alt text](https://github.com/ranjeetsn/twitter_llm_response_project/blob/main/readme_files/customer_support_app_wokflow.png)
+
+- The DAG for the customer support flow is as shown below:
+![alt text](https://github.com/ranjeetsn/twitter_llm_response_project/blob/main/readme_files/dag_workflow.png)
 
 

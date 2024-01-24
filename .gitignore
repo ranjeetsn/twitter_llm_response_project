@@ -1,0 +1,3 @@
+# Ignore the .env files
+.env*
+.ipynb_checkpoints*

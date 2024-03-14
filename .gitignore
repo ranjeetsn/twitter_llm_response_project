@@ -1,3 +1,13 @@
 # Ignore the .env files
 .env*
 .ipynb_checkpoints*
+
+# Ignore specific files
+big_query_table_truth_social.json
+marine-embassy-416705-19cd2730e55e.json
+
+# Ignore specific directories
+my_packages_2.zip
+my_packages
+my_packages_2 2/
+my_packages_2/

@@ -34,3 +34,8 @@ We use a Directed Acyclic graph concept to design our customer support chatbot. 
 ![alt text](https://github.com/ranjeetsn/twitter_llm_response_project/blob/main/readme_files/dag_workflow.png)
 
 
+
+
+## AI Safety Challenge: Preventing Irreversible Actions
+
+This repository includes a mock-only action gate for a customer-support agent. It allows local drafts, requires action-bound human approval for public replies and refunds, and blocks unsupported actions. Run the demo and tests using the instructions in [safety_gate/README.md](safety_gate/README.md).

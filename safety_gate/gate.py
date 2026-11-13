@@ -288,6 +288,9 @@ class MockActionExecutor:
 
     def __init__(self) -> None:
         self.executed: list[ActionRequest] = []
+        self.drafts: list[ActionRequest] = []
+        self.public_replies: list[ActionRequest] = []
+        self.refunds: list[ActionRequest] = []
         self._fingerprints: dict[str, str] = {}
 
     def execute(self, request: ActionRequest, idempotency_key: str) -> str:
@@ -299,6 +302,12 @@ class MockActionExecutor:
             return f"duplicate suppressed: {idempotency_key}"
         self._fingerprints[idempotency_key] = fingerprint
         self.executed.append(request)
+        if request.action_type == ActionType.DRAFT_REPLY.value:
+            self.drafts.append(request)
+        elif request.action_type == ActionType.POST_PUBLIC_REPLY.value:
+            self.public_replies.append(request)
+        elif request.action_type == ActionType.ISSUE_REFUND.value:
+            self.refunds.append(request)
         return f"mock receipt {idempotency_key}"
 
 

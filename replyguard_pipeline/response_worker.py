@@ -17,8 +17,10 @@ from replyguard_pipeline.store import (
 
 def main() -> None:
     ensure_database()
-    responder = build_responder()
-    print(f"Response worker listening on {RESPONSE_REQUESTS_TOPIC}; provider={responder.model_name}")
+    print(
+        f"Response worker listening on {RESPONSE_REQUESTS_TOPIC}; "
+        "provider settings are checked for each message"
+    )
     while True:
         try:
             consumer = create_consumer(RESPONSE_REQUESTS_TOPIC, RESPONSE_GROUP_ID)
@@ -40,13 +42,23 @@ def main() -> None:
                 consumer.commit()
                 continue
 
+            responder = None
             try:
+                responder = build_responder()
                 generated = responder.generate(text)
                 save_response(tweet_id, generated.text, generated.model_name)
                 print(f"Draft saved for {tweet_id} using {generated.model_name}.")
             except Exception as exc:
                 mark_response_failed(tweet_id, f"{type(exc).__name__}: response generation failed")
                 print(f"Draft generation failed for {tweet_id} ({type(exc).__name__}).")
+            finally:
+                if responder is not None:
+                    close = getattr(responder, "close", None)
+                    if close is not None:
+                        try:
+                            close()
+                        except Exception as exc:
+                            print(f"Response client cleanup failed ({type(exc).__name__}).")
             consumer.commit()
     finally:
         consumer.close()

@@ -23,6 +23,16 @@ from safety_gate.gate import (
     MockActionExecutor,
 )
 from safety_gate.workflow import SupportCase, SupportWorkflow, WorkflowRun
+from replyguard_pipeline.store import (
+    decide_response,
+    ensure_database,
+    list_activity,
+    list_tweets,
+    mark_response_failed,
+    pipeline_counts,
+    queue_response,
+    update_response_draft,
+)
 
 
 DEMO_OPERATOR = "support-lead-01"
@@ -229,6 +239,17 @@ def _activity_rows():
                 "Details": event["reason"],
             }
         )
+    for event in list_activity():
+        rows.append(
+            {
+                "Time (UTC)": event["occurred_at"],
+                "Event": event["event"],
+                "Action": "pipeline",
+                "Action ID": event["tweet_id"],
+                "Actor": "system",
+                "Details": event["details"],
+            }
+        )
     return sorted(rows, key=lambda item: item["Time (UTC)"], reverse=True)
 
 
@@ -299,9 +320,162 @@ def _render_case(case_id: str) -> None:
             st.divider()
 
 
+def _pipeline_action_request(row: dict) -> ActionRequest:
+    return ActionRequest(
+        action_id=f"pipeline:{row['tweet_id']}:reply",
+        action_type=ActionType.POST_PUBLIC_REPLY.value,
+        requester="replyguard-response-worker",
+        target=row["tweet_id"],
+        payload={"text": row["draft_text"] or ""},
+        untrusted_context=row["text"],
+    )
+
+
+def _render_pipeline_monitor() -> None:
+    @st.fragment(run_every="5s")
+    def live_view() -> None:
+        rows = list_tweets(limit=200)
+        counts = pipeline_counts()
+        c1, c2, c3, c4, c5 = st.columns(5)
+        c1.metric("Saved locally", len(rows))
+        c2.metric("Queued", counts.get("queued", 0) + counts.get("queued_for_response", 0))
+        c3.metric("Needs review", counts.get("awaiting_review", 0))
+        c4.metric("Approved", counts.get("approved", 0))
+        c5.metric("Failed", counts.get("failed", 0))
+
+        if not rows:
+            st.info("No Kafka posts have reached SQLite yet. Start the broker and workers, then post from Mock Twitter.")
+            return
+
+        st.dataframe(
+            [
+                {
+                    "Handle": row["author_handle"],
+                    "Post": row["text"],
+                    "Status": row["response_status"] or row["tweet_status"],
+                    "Received (UTC)": row["received_at"],
+                    "Tweet ID": row["tweet_id"],
+                }
+                for row in rows
+            ],
+            hide_index=True,
+            use_container_width=True,
+        )
+
+        selected_id = st.selectbox(
+            "Inspect a local post",
+            [row["tweet_id"] for row in rows],
+            format_func=lambda tweet_id: next(
+                f"{row['author_handle']} · {row['tweet_id'][:8]} · {(row['text'][:60] + '…') if len(row['text']) > 60 else row['text']}"
+                for row in rows
+                if row["tweet_id"] == tweet_id
+            ),
+            key="pipeline-selected-tweet",
+        )
+        row = next(item for item in rows if item["tweet_id"] == selected_id)
+        st.markdown(f"#### {row['author_handle']} · {row['tweet_id']}")
+        st.info(row["text"])
+        status = row["response_status"] or row["tweet_status"]
+        st.caption(f"Pipeline status: {status} · model: {row['model_name'] or 'waiting'}")
+
+        if row["response_status"] == "awaiting_review" and row["draft_text"]:
+            draft_key = f"pipeline-draft-{selected_id}-{row['response_created_at']}"
+            edited_draft = st.text_area(
+                "Suggested reply · edit before approval",
+                value=row["draft_text"],
+                max_chars=280,
+                key=draft_key,
+                height=100,
+            )
+            save_col, approve_col, reject_col = st.columns(3)
+            with save_col:
+                if st.button("Save draft edit", key=f"save-draft-{draft_key}", use_container_width=True):
+                    try:
+                        changed = update_response_draft(selected_id, edited_draft, DEMO_OPERATOR)
+                        if changed:
+                            st.success("Draft saved. Review now applies to this exact text.")
+                        else:
+                            st.warning("This draft is no longer awaiting review.")
+                    except ValueError as exc:
+                        st.error(str(exc))
+                    st.rerun()
+            with approve_col:
+                if st.button(
+                    "Approve · mock only",
+                    key=f"approve-pipeline-{selected_id}",
+                    type="primary",
+                    disabled=(edited_draft.strip() != row["draft_text"]),
+                    use_container_width=True,
+                ):
+                    request = _pipeline_action_request(row)
+                    try:
+                        now = _now()
+                        token = st.session_state["approvals"].approve(request, DEMO_OPERATOR, now=now)
+                        result = st.session_state["broker"].execute(request, token, now=now)
+                        if result.status is ExecutionStatus.EXECUTED:
+                            changed = decide_response(
+                                selected_id,
+                                "approved",
+                                DEMO_OPERATOR,
+                                "Exact approved reply recorded by the mock executor.",
+                            )
+                            if changed:
+                                st.success("Approved and recorded as a mock post. Nothing was sent externally.")
+                            else:
+                                st.warning("The database item changed during review; refresh the queue.")
+                        else:
+                            st.error(f"Safety gate blocked the action: {result.reason}")
+                    except ApprovalError as exc:
+                        st.error(str(exc))
+                    st.rerun()
+            with reject_col:
+                if st.button("Reject draft", key=f"reject-pipeline-{selected_id}", use_container_width=True):
+                    changed = decide_response(
+                        selected_id,
+                        "rejected",
+                        DEMO_OPERATOR,
+                        "Rejected in the local review console.",
+                    )
+                    if changed:
+                        st.success("Draft rejected; no post was created.")
+                    else:
+                        st.warning("This draft is no longer awaiting review.")
+                    st.rerun()
+        elif status == "failed":
+            st.warning(row["error"] or row["review_note"] or "Response generation failed.")
+            if st.button("Retry response generation", key=f"retry-response-{selected_id}"):
+                if queue_response(selected_id):
+                    try:
+                        from replyguard_pipeline.kafka_io import create_producer, send_response_request
+
+                        producer = create_producer()
+                        try:
+                            send_response_request(
+                                producer,
+                                {"tweet_id": selected_id, "text": row["text"], "created_at": row["created_at"]},
+                            )
+                        finally:
+                            producer.close(timeout=5)
+                        st.success("Retry queued. If OpenAI mode is enabled, this may make a paid model call.")
+                    except Exception as exc:
+                        mark_response_failed(selected_id, f"{type(exc).__name__}: retry enqueue failed")
+                        st.error(f"Could not reach Kafka ({type(exc).__name__}).")
+                st.rerun()
+
+        if row["response_status"] in {"approved", "rejected"}:
+            st.markdown("#### Final draft")
+            st.write(row["draft_text"] or "No draft saved")
+            st.caption(f"Decision by {row['reviewed_by']} at {row['reviewed_at']}")
+        if row["response_status"] == "queued":
+            st.info("The response worker is processing this post.")
+
+    live_view()
+
+
 def main() -> None:
     st.set_page_config(page_title="ReplyGuard Social Care Console", page_icon="🛡️", layout="wide")
     _initialize()
+    ensure_database()
 
     st.title("ReplyGuard · Social Care Console")
     st.caption("A local simulation for triaging posts, reviewing proposed actions, and tracking mock outcomes.")
@@ -353,7 +527,9 @@ def main() -> None:
                 del st.session_state[key]
             st.rerun()
 
-    inbox_tab, review_tab, activity_tab = st.tabs(["Inbox", "Review queue", "Activity log"])
+    inbox_tab, review_tab, activity_tab, pipeline_tab = st.tabs(
+        ["Inbox", "Review queue", "Activity log", "Kafka inbox"]
+    )
 
     with inbox_tab:
         case_ids = list(st.session_state["case_runs"].keys())
@@ -403,6 +579,11 @@ def main() -> None:
                 mime="text/csv",
             )
         st.caption("The log records action metadata, not the approval token. Session history is not durable storage.")
+
+    with pipeline_tab:
+        st.markdown("### Local Kafka → SQLite pipeline")
+        st.caption("This view refreshes every five seconds. Replies are drafts until the safety gate approves them.")
+        _render_pipeline_monitor()
 
     st.divider()
     st.caption("Prototype only: the deterministic agent, keyword triage, approval identity, audit history, and action executor are simulated. Nothing is sent to X/Twitter, Kafka, an LLM, or a payment provider.")

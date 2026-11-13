@@ -38,7 +38,7 @@ The default responder is deterministic and free. To use OpenAI, install the opti
 
 Then open the manager console sidebar, enter an OpenAI model ID and API key, and save the settings. The key is stored in the operating-system credential store (Windows Credential Manager on Windows), not in the project database or Git. The response worker checks these settings for every queued post, so you do not need to restart it after saving. The default model field is prefilled with `gpt-6-luna`; you can change it if your API account uses a different model.
 
-OpenAI mode is opt-in. Each queued or retried post can make a paid API call, and the post text is sent to OpenAI for draft generation. The model has no tools and cannot approve or post anything. Clear the saved settings in the manager sidebar to return to the free mock responder. Environment-variable configuration remains supported for terminal-only use.
+OpenAI mode is opt-in. Each queued or retried post can make a paid API call, and the post text is sent to OpenAI for draft generation. The model has no tools and cannot approve or post anything. Responses are accepted only when the API reports completion and the draft ends with punctuation; incomplete drafts are marked failed instead of entering review. Clear the saved settings in the manager sidebar to return to the free mock responder. Environment-variable configuration remains supported for terminal-only use.
 
 ## Safety controls and limits
 

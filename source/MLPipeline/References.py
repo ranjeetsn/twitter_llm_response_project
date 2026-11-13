@@ -65,12 +65,12 @@ class References:
 
     # PARC_PATH = "./parc_sample"
 
+    # Supply credentials via environment variables. Rotate any values previously committed.
     # Insert your credentials for Tweet
-    access_token = "1412669800707330048-Axh3xFxNAYbSt7t7XnBEW7QIprLk0y"
-    access_secret = "Zrzl6n5pkGzgiSBesIOooGwVqW6AHCEXmGGRXUw1bgMmt"
-
-    consumer_key = "PA4SD4sL3OK4RewfUGR5I58tj"
-    consumer_secret = "reDTNpU61whECGlWrZn0WERs5s1O7EdBSB0TdsG7VEDuz1Ybzz"
+    access_token = os.getenv("X_ACCESS_TOKEN")
+    access_secret = os.getenv("X_ACCESS_SECRET")
+    consumer_key = os.getenv("X_CONSUMER_KEY")
+    consumer_secret = os.getenv("X_CONSUMER_SECRET")
 
     TRACK_TWEET = "projectpro_test"
 

@@ -13,6 +13,15 @@ The safety evidence is focused on the challenge's core question: does the action
 From the repository root with Python 3.10 or newer:
 
 ```bash
+pip install -r requirements-demo.txt
+streamlit run app.py
+```
+
+The dashboard opens a social-care inbox with sample cases, manual message entry, and CSV import. Reviewers can approve or reject proposed actions, then inspect mock outcomes and export the activity log. All app state is session-local.
+
+For the command-line safety demo and tests:
+
+```bash
 python -m safety_gate.demo
 python -m unittest safety_gate.test_gate safety_gate.test_workflow -v
 ```
@@ -48,7 +57,7 @@ The gate tests cover drafts, missing approval, exact-action approval, changed co
 
 The simulation covers the safety-relevant flow, not the repository's legacy Kafka stream or a paid LLM call. The agent is deterministic so the demo is cheap and reproducible. The in-memory approval ledger and audit log are not durable. The demo passes an approver ID directly; production must derive identity from an authenticated operator session and must not expose the approval method as an agent tool. A production deployment also needs atomic persistent token consumption, tamper-evident audit storage, API-level enforcement with no alternate path to side effects, and provider idempotency. Human approval can still approve bad content; the gate controls authorization, not truthfulness or quality.
 
-Rotate any credentials previously committed to the public repository. Moving values to environment variables does not revoke old credentials or erase them from Git history.
+Previously committed credentials have been revoked. The demo uses no API credentials, and its code does not call external services.
 
 ## Short submission description
 

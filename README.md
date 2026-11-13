@@ -6,18 +6,21 @@ ReplyGuard has two local Streamlit apps: a tiny mock Twitter composer and a soci
 
 Use Python 3.10 or newer and Docker Desktop. From the repository root:
 
-    pip install -r requirements-pipeline.txt
+On Windows PowerShell, create the virtual environment and install dependencies without activating it (this avoids PowerShell script-policy changes):
+
+    python -m venv .venv
+    .\.venv\Scripts\python.exe -m pip install -r requirements-pipeline.txt
     docker compose up -d kafka
 
-In separate terminals, start the two workers:
+In separate terminals, run the workers using the virtual-environment Python:
 
-    python -m replyguard_pipeline.ingest_worker
-    python -m replyguard_pipeline.response_worker
+    .\.venv\Scripts\python.exe -m replyguard_pipeline.ingest_worker
+    .\.venv\Scripts\python.exe -m replyguard_pipeline.response_worker
 
 Then run both Streamlit apps in separate terminals:
 
-    streamlit run mock_twitter_app.py --server.port 8501
-    streamlit run app.py --server.port 8502
+    .\.venv\Scripts\streamlit.exe run mock_twitter_app.py --server.port 8501
+    .\.venv\Scripts\streamlit.exe run app.py --server.port 8502
 
 Open http://localhost:8501 for Mock Twitter and http://localhost:8502 for the manager console. The console refreshes the Kafka inbox every five seconds. The SQLite database is created at data/replyguard.sqlite3 and is ignored by Git.
 

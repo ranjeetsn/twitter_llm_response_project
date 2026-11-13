@@ -1,7 +1,7 @@
 """Local Streamlit console for the ReplyGuard mock support workflow.
 
-Every action is handled by the in-memory mock executor. This app has no live
-social-media, LLM, Kafka, or payment integrations.
+Social-media and payment actions are simulated. The separate Kafka pipeline can
+optionally use OpenAI only to draft text; approval still uses the mock executor.
 """
 
 from __future__ import annotations
@@ -23,6 +23,12 @@ from safety_gate.gate import (
     MockActionExecutor,
 )
 from safety_gate.workflow import SupportCase, SupportWorkflow, WorkflowRun
+from replyguard_pipeline.config import LLM_PROVIDER, OPENAI_MODEL
+from replyguard_pipeline.credentials import (
+    clear_openai_settings,
+    get_openai_settings,
+    save_openai_settings,
+)
 from replyguard_pipeline.store import (
     decide_response,
     ensure_database,
@@ -156,7 +162,13 @@ def _record_review(case_id: str, request: ActionRequest, status: str, note: str)
     )
 
 
-def _review_controls(case_id: str, run: WorkflowRun, request: ActionRequest) -> None:
+def _review_controls(
+    case_id: str,
+    run: WorkflowRun,
+    request: ActionRequest,
+    *,
+    key_scope: str,
+) -> None:
     decision = st.session_state["review_decisions"][case_id].get(request.action_id)
     if decision:
         st.caption(f"{decision['status']} · {decision['time']}")
@@ -171,7 +183,7 @@ def _review_controls(case_id: str, run: WorkflowRun, request: ActionRequest) -> 
     with approve_col:
         if st.button(
             "Approve · mock only",
-            key=f"approve-{request.action_id}",
+            key=f"approve-{key_scope}-{request.action_id}",
             type="primary",
             use_container_width=True,
         ):
@@ -190,7 +202,7 @@ def _review_controls(case_id: str, run: WorkflowRun, request: ActionRequest) -> 
     with reject_col:
         if st.button(
             "Reject",
-            key=f"reject-{request.action_id}",
+            key=f"reject-{key_scope}-{request.action_id}",
             use_container_width=True,
         ):
             _record_review(case_id, request, "Rejected", "Rejected in the demo review console.")
@@ -316,7 +328,7 @@ def _render_case(case_id: str) -> None:
             st.write(_action_description(request))
             if request.action_type == ActionType.DELETE_PUBLIC_POST.value:
                 st.warning("This action is outside the allowlist and remains blocked.")
-            _review_controls(case_id, run, request)
+            _review_controls(case_id, run, request, key_scope="case-detail")
             st.divider()
 
 
@@ -472,6 +484,78 @@ def _render_pipeline_monitor() -> None:
     live_view()
 
 
+def _render_openai_settings() -> None:
+    st.markdown("#### Optional OpenAI drafts")
+    try:
+        stored_settings = get_openai_settings()
+    except Exception as exc:
+        stored_settings = None
+        st.error(f"Could not access the operating-system credential store ({type(exc).__name__}).")
+
+    if stored_settings:
+        st.success(f"OpenAI enabled for new Kafka drafts · {stored_settings['model']}")
+    elif LLM_PROVIDER == "openai":
+        st.info(f"OpenAI environment mode selected · {OPENAI_MODEL or 'model not set'}")
+    else:
+        st.info("Mock responder active. Save an OpenAI key below to enable model-generated drafts.")
+
+    st.caption(
+        "The key is stored in your operating-system credential store, not in SQLite or Git. "
+        "Each queued post sends its text to OpenAI and may incur API charges. "
+        "The model drafts text only; human approval is still required."
+    )
+    st.caption(
+        "Install the optional SDK first if needed: "
+        r"`.venv\Scripts\python.exe -m pip install -r .\requirements-openai.txt`"
+    )
+
+    default_model = (
+        stored_settings["model"]
+        if stored_settings
+        else (OPENAI_MODEL or "gpt-6-luna")
+    )
+    with st.form("openai-settings-form", clear_on_submit=True):
+        model_name = st.text_input(
+            "OpenAI model ID",
+            value=default_model,
+            key="openai-model-input",
+        )
+        api_key = st.text_input(
+            "OpenAI API key",
+            type="password",
+            key="openai-api-key-input",
+            help="The key is saved in the operating-system credential store.",
+        )
+        save_clicked = st.form_submit_button(
+            "Save key and enable OpenAI",
+            use_container_width=True,
+        )
+
+    if save_clicked:
+        try:
+            save_openai_settings(api_key, model_name)
+            st.success("OpenAI settings saved. The response worker will use them for the next queued draft.")
+            st.rerun()
+        except ValueError as exc:
+            st.warning(str(exc))
+        except Exception as exc:
+            st.error(f"Could not save settings ({type(exc).__name__}).")
+
+    if stored_settings and st.button(
+        "Clear saved OpenAI settings",
+        key="clear-openai-settings",
+        use_container_width=True,
+    ):
+        try:
+            clear_openai_settings()
+            st.success("Saved OpenAI settings cleared; the pipeline will use the mock responder.")
+            st.rerun()
+        except Exception as exc:
+            st.error(f"Could not clear settings ({type(exc).__name__}).")
+
+    st.caption("This console has no sign-in; keep it local and do not expose it to a network.")
+
+
 def main() -> None:
     st.set_page_config(page_title="ReplyGuard Social Care Console", page_icon="🛡️", layout="wide")
     _initialize()
@@ -498,8 +582,8 @@ def main() -> None:
 
     with st.sidebar:
         st.header("Workspace")
-        st.success("DEMO MODE · no live integrations")
-        st.caption("All cases, approvals, and effects live in this browser session.")
+        st.success("LOCAL DEMO · social-media and payment actions are simulated")
+        st.caption("Challenge cases live in this session; Kafka pipeline records are stored in local SQLite.")
         with st.form("add-case-form", clear_on_submit=True):
             incoming = st.text_area("Add a social post", placeholder="Paste a customer message to simulate intake…", height=100)
             add_clicked = st.form_submit_button("Add to inbox", use_container_width=True)
@@ -520,6 +604,8 @@ def main() -> None:
                 st.rerun()
             else:
                 st.info(message)
+
+        _render_openai_settings()
 
         st.caption(f"Demo operator: {DEMO_OPERATOR}. This is a fixed example identity, not authentication.")
         if st.button("Reset demo session", use_container_width=True):
@@ -560,7 +646,7 @@ def main() -> None:
                 with st.expander(f"{case_id} · {_action_title(request.action_type)} · {_category(run.case.customer_message)}", expanded=True):
                     st.write(run.case.customer_message)
                     st.markdown(f"**Proposed action:** {_action_description(request)}")
-                    _review_controls(case_id, run, request)
+                    _review_controls(case_id, run, request, key_scope="review-queue")
 
     with activity_tab:
         rows = _activity_rows()
@@ -586,7 +672,11 @@ def main() -> None:
         _render_pipeline_monitor()
 
     st.divider()
-    st.caption("Prototype only: the deterministic agent, keyword triage, approval identity, audit history, and action executor are simulated. Nothing is sent to X/Twitter, Kafka, an LLM, or a payment provider.")
+    st.caption(
+        "Prototype only: social-media and payment actions are simulated; Kafka and SQLite run locally. "
+        "OpenAI is contacted only when explicitly configured, to draft text from queued posts. "
+        "No X/Twitter or payment provider is contacted."
+    )
 
 
 if __name__ == "__main__":

@@ -1,0 +1,2 @@
+-r requirements-pipeline.txt
+openai>=1.66,<3.0

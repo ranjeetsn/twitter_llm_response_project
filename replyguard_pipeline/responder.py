@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from replyguard_pipeline.config import LLM_PROVIDER, OPENAI_MODEL
+from replyguard_pipeline.credentials import get_openai_settings
 
 
 @dataclass(frozen=True)
@@ -34,11 +35,12 @@ class OpenAIResponder:
 
     model_name: str
 
-    def __init__(self, model_name: str) -> None:
+    def __init__(self, model_name: str, api_key: str | None = None) -> None:
         import os
 
-        if not os.environ.get("OPENAI_API_KEY"):
-            raise RuntimeError("Set OPENAI_API_KEY to enable the optional OpenAI provider.")
+        api_key = api_key or os.environ.get("OPENAI_API_KEY")
+        if not api_key:
+            raise RuntimeError("Save an OpenAI key in the manager console or set OPENAI_API_KEY.")
         if not model_name:
             raise RuntimeError("Set REPLYGUARD_OPENAI_MODEL to enable the optional OpenAI provider.")
         try:
@@ -46,8 +48,11 @@ class OpenAIResponder:
         except ImportError as exc:
             raise RuntimeError("Install requirements-openai.txt to use the OpenAI provider.") from exc
 
-        self._client = OpenAI(max_retries=0, timeout=60)
+        self._client = OpenAI(api_key=api_key, max_retries=0, timeout=60)
         self.model_name = model_name
+
+    def close(self) -> None:
+        self._client.close()
 
     def generate(self, tweet_text: str) -> GeneratedReply:
         response = self._client.responses.create(
@@ -71,6 +76,14 @@ class OpenAIResponder:
 
 
 def build_responder():
+    # The manager console saves this setting in the OS credential store. Read it
+    # for each queued message so UI changes apply without restarting the worker.
+    stored_settings = get_openai_settings()
+    if stored_settings:
+        return OpenAIResponder(
+            stored_settings["model"],
+            api_key=stored_settings["api_key"],
+        )
     if LLM_PROVIDER == "mock":
         return MockResponder()
     if LLM_PROVIDER == "openai":

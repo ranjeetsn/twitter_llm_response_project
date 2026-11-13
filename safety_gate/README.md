@@ -2,6 +2,8 @@
 
 ReplyGuard demonstrates how to keep an AI customer-support workflow from publishing a public reply or issuing a refund without human authorization. It runs the safety-relevant path from an incoming complaint, through a simulated agent proposal and policy gate, to mock execution and audit events.
 
+The repository also includes a separate local Kafka/SQLite pipeline with two Streamlit apps. Follow the root README to run Mock Twitter, the ingest and response workers, and the manager console together. The manager console's Kafka inbox uses this same approval gate before recording a mock public reply.
+
 ## Is a simulation suitable for the challenge?
 
 Yes. The [challenge guide](https://www.drawerrr.com/challenge/ai-safety-and-control/prevent-irreversible-autonomous-actions) recommends a mock API or sandbox for the test environment and welcomes prototypes when implementation, evidence, and limitations are explained honestly. A simulation also avoids paid model calls and real posts or payments. It is important to describe it as a tested prototype, not a production deployment.

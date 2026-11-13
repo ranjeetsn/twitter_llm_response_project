@@ -36,6 +36,8 @@ We use a Directed Acyclic graph concept to design our customer support chatbot. 
 
 
 
-## AI Safety Challenge: Preventing Irreversible Actions
+## ReplyGuard: Mock End-to-End Safety for Support Agents
 
-This repository includes a mock-only action gate for a customer-support agent. It allows local drafts, requires action-bound human approval for public replies and refunds, and blocks unsupported actions. Run the demo and tests using the instructions in [safety_gate/README.md](safety_gate/README.md).
+ReplyGuard simulates the safety-relevant support flow from complaint intake through an agent proposal, a fail-closed policy gate, human review, mock execution, and audit. Public replies and refunds require short-lived approval bound to the exact action; unsupported actions are denied. It uses deterministic scenarios and mock services, with no paid LLM, live X/Twitter, Kafka, or payment connection.
+
+Run `python -m safety_gate.demo` and `python -m unittest safety_gate.test_gate safety_gate.test_workflow -v`. See [safety_gate/README.md](safety_gate/README.md) for the design, reproducible steps, test coverage, submission description, and limitations.

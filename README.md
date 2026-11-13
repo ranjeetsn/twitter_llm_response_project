@@ -32,15 +32,21 @@ Open http://localhost:8501 for Mock Twitter and http://localhost:8502 for the ma
 4. The manager console displays the post and draft. A reviewer can edit, approve, or reject it.
 5. Approval passes through the safety gate and records a mock post; it never contacts X/Twitter.
 
-The default responder is deterministic and free. To enable the optional OpenAI provider, install requirements-openai.txt, set REPLYGUARD_LLM_PROVIDER=openai, OPENAI_API_KEY, and REPLYGUARD_OPENAI_MODEL in the response-worker environment, then start or restart that worker. Each queued post may then incur an API charge and its text is sent to OpenAI. Retrying a failed response can make another call.
+The default responder is deterministic and free. To use OpenAI, install the optional SDK with:
+
+    .\.venv\Scripts\python.exe -m pip install -r .\requirements-openai.txt
+
+Then open the manager console sidebar, enter an OpenAI model ID and API key, and save the settings. The key is stored in the operating-system credential store (Windows Credential Manager on Windows), not in the project database or Git. The response worker checks these settings for every queued post, so you do not need to restart it after saving. The default model field is prefilled with `gpt-6-luna`; you can change it if your API account uses a different model.
+
+OpenAI mode is opt-in. Each queued or retried post can make a paid API call, and the post text is sent to OpenAI for draft generation. The model has no tools and cannot approve or post anything. Clear the saved settings in the manager sidebar to return to the free mock responder. Environment-variable configuration remains supported for terminal-only use.
 
 ## Safety controls and limits
 
 - Public replies require a short-lived, single-use approval bound to the exact text and post.
 - Refunds in the original safety demo also require approval; deletion and unknown actions are blocked.
-- The agent, category and priority hints, OpenAI-free responder, approval identity, and executor are demo components.
+- The mock responder, keyword-based category and priority hints, approval identity, and executor are demo components. OpenAI mode is optional and drafts text only.
 - The demo operator is fixed and is not authentication. SQLite is local, but audit state and production protections are not tamper-proof.
-- No live X/Twitter, payment, or Kafka cloud service is used. Kafka runs locally in Docker; the database stays on this computer.
+- No live X/Twitter or payment provider is used. Kafka runs locally in Docker; the database stays on this computer. OpenAI is called only after explicit configuration for text drafts.
 
 Run the original safety-gate demo and unit tests with:
 

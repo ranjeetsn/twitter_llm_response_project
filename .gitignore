@@ -11,3 +11,6 @@ my_packages_2.zip
 my_packages
 my_packages_2 2/
 my_packages_2/
+# Python runtime files
+__pycache__/
+*.py[cod]

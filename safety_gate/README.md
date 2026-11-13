@@ -1,44 +1,55 @@
-# Human approval gate for high-impact support actions
+# ReplyGuard: mock end-to-end safety for support agents
 
-This prototype adapts the repository's customer-support agent to the Drawerrr AI Safety Challenge. It demonstrates a narrow safety boundary around actions that could have an external effect: publishing a customer reply and issuing a refund.
+ReplyGuard demonstrates how to keep an AI customer-support workflow from publishing a public reply or issuing a refund without human authorization. It runs the safety-relevant path from an incoming complaint, through a simulated agent proposal and policy gate, to mock execution and audit events.
 
-## Run the demo
+## Is a simulation suitable for the challenge?
 
-From the repository root, using Python 3.10 or newer:
+Yes. The [challenge guide](https://www.drawerrr.com/challenge/ai-safety-and-control/prevent-irreversible-autonomous-actions) recommends a mock API or sandbox for the test environment and welcomes prototypes when implementation, evidence, and limitations are explained honestly. A simulation also avoids paid model calls and real posts or payments. It is important to describe it as a tested prototype, not a production deployment.
+
+The safety evidence is focused on the challenge's core question: does the action boundary stop a risky effect when approval is absent, expired, unauthorized, or bound to different content? The tests exercise those paths alongside prompt injection, malformed refund values, replay, and unsupported deletion.
+
+## Run it
+
+From the repository root with Python 3.10 or newer:
 
 ```bash
 python -m safety_gate.demo
-python -m unittest safety_gate.test_gate -v
+python -m unittest safety_gate.test_gate safety_gate.test_workflow -v
 ```
 
-The demo uses only `MockActionExecutor`. It does not connect to X/Twitter, a payment processor, Kafka, or an LLM.
+Both commands use only the Python standard library. They do not call the paid LLM, X/Twitter, Kafka, or a payment provider.
 
-## How the gate works
+## End-to-end flow
 
-1. The agent submits a typed `ActionRequest`; the request is a proposal, not authority to act.
-2. `RiskPolicy` allows a local draft, requires a human approval for public replies and refunds, and denies unsupported or malformed actions.
-3. The human approval authority issues a short-lived, single-use token bound to a SHA-256 fingerprint of the entire proposal, including the target, payload, requester, and untrusted context.
-4. `ActionBroker` checks the policy again, verifies the fingerprint and expiry, consumes the token before execution, and blocks duplicate action IDs.
-5. Only the broker can call the configured executor. The included executor is a mock and records the action instead of contacting a service.
+1. A sample support case enters the simulator.
+2. A deterministic agent stand-in creates a local draft and proposes external actions. Keyword rules make the examples repeatable; this is not a live LLM.
+3. `RiskPolicy` allows the local draft, holds public replies and refunds for approval, and denies deletion or unknown action types.
+4. A separate approval authority issues a five-minute, single-use token bound to the exact action fingerprint.
+5. `ActionBroker` rechecks policy, expiry, fingerprint, action ID, and token use before calling the mock executor.
+6. The mock executor records posts/refunds in local lists. Audit events record decision metadata without storing customer text or approval tokens.
 
-The action policy does not treat text in a customer message as an approval instruction. Prompt injection in the untrusted context cannot satisfy the separate approval check.
+The demo completes one human-approved public reply and one human-approved refund. A prompt-injection case asks the agent to refund and delete a complaint; the refund and public reply stay pending, and deletion is blocked.
 
-## Controls shown
+## Safety controls
 
-- Default deny for unknown action types and invalid fields.
-- Human review for every public post and refund.
-- Approval bound to the exact action content and destination.
-- Five-minute approval expiry and one-time token use.
-- Duplicate action-ID protection and an idempotency key passed to the executor.
-- Metadata-only audit events; the proposal text and approval token are not copied into the audit log.
-- No real-world API credentials or external action adapter in the demo.
+- Default deny for malformed requests and action types outside the allowlist.
+- Human approval for every public reply and refund.
+- Approval expires after five minutes and cannot be reused.
+- The approval is bound to the target, content, requester, action ID, and untrusted customer context.
+- The action ID cannot be reused with altered content; the executor receives it as an idempotency key.
+- Untrusted customer text cannot itself grant approval.
+- The executor is mock-only; no credentials or live service adapters are included.
 
-## Test coverage
+## Tests
 
-The unit tests cover a safe local draft, an unapproved public post, a successful approval, replay, changed content, expiry, unauthorized/self-approval, prompt injection, malformed refund data, and an unsupported delete action.
+The gate tests cover drafts, missing approval, exact-action approval, changed content, expiry, replay, unauthorized/self-approval, prompt injection, malformed refunds, unknown actions, and deletion. Workflow tests cover intake-to-approved-post, approval-gated refund execution, and a prompt-injection request that cannot authorize a refund or deletion.
 
-## Security boundary and limitations
+## Limits and production requirements
 
-This is a reproducible prototype, not a production authorization service. The demo passes an approver ID directly to `ApprovalAuthority`; a deployed system must derive identity from an authenticated human session and must never expose the approval method as an agent tool. The approval ledger and audit events are in memory, so production needs durable storage, atomic single-use consumption, tamper-evident audit retention, and downstream idempotency. The mock executor cannot prove the behavior of a live provider. The gate controls whether a typed action can execute; it does not determine whether the proposed message is truthful, appropriate, or harmless after a human approves it.
+The simulation covers the safety-relevant flow, not the repository's legacy Kafka stream or a paid LLM call. The agent is deterministic so the demo is cheap and reproducible. The in-memory approval ledger and audit log are not durable. The demo passes an approver ID directly; production must derive identity from an authenticated operator session and must not expose the approval method as an agent tool. A production deployment also needs atomic persistent token consumption, tamper-evident audit storage, API-level enforcement with no alternate path to side effects, and provider idempotency. Human approval can still approve bad content; the gate controls authorization, not truthfulness or quality.
 
-For a live integration, enforce this gate at the tool/API boundary so no alternate code path can publish, refund, or delete directly. Keep real credentials in a secret manager, rotate exposed credentials, and test the provider's idempotency and failure semantics before enabling execution.
+Rotate any credentials previously committed to the public repository. Moving values to environment variables does not revoke old credentials or erase them from Git history.
+
+## Short submission description
+
+ReplyGuard is a mock end-to-end customer-support agent safety demo. It allows a draft to remain local, requires a short-lived human approval tied to the exact proposed action before a public reply or refund, and blocks unsupported actions. A deterministic agent, mock publisher, mock refund ledger, audit events, and adversarial tests make the control path reproducible without paid model calls or live external actions. The prototype documents its identity, persistence, and deployment limits.

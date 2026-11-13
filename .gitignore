@@ -2,6 +2,7 @@
 .env*
 .ipynb_checkpoints*
 __pycache__/
+.venv/
 *.py[cod]
 
 # Ignore the generated local pipeline database (keep data/ source files)

@@ -49,7 +49,12 @@ def main() -> None:
                 save_response(tweet_id, generated.text, generated.model_name)
                 print(f"Draft saved for {tweet_id} using {generated.model_name}.")
             except Exception as exc:
-                mark_response_failed(tweet_id, f"{type(exc).__name__}: response generation failed")
+                safe_reason = (
+                    str(exc)
+                    if isinstance(exc, RuntimeError)
+                    else f"{type(exc).__name__}: response generation failed"
+                )
+                mark_response_failed(tweet_id, safe_reason)
                 print(f"Draft generation failed for {tweet_id} ({type(exc).__name__}).")
             finally:
                 if responder is not None:

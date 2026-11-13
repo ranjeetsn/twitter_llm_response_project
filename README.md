@@ -1,43 +1,35 @@
-# Using LLM Agent to respond to grievances on Twitter
-- Fine tuning LLM on customer support and airline twitter customer grievances data to respond to any customer grievances on twitter using kafka and spark
-- We use LLM to generate a new generation of Business Process Management suites
+# ReplyGuard: AI Support Safety Console
 
-## Key Technologies for LLM
-- Kafka Producer for tweet streaming
-- Tweepy for twitter api
-- LLM Chains with OpenAI Model
-- Custom Output Parsers to validate steps
-- ReACT Prompt Engineering Technique
-- Retrieval Augmented Generation
-- Speech to Text with Whisper AI
-- Database and API LLM Integrations
-- Streamlit Application for concept prototype phase
+ReplyGuard is a local Streamlit demo for handling customer posts like a social-care team: review an inbox, triage cases, inspect proposed replies and refunds, make a human decision, and track the mock outcome.
 
-## Business Process Management
-A BPM or Business Process management can be represented as a Directed Acyclic Graph (DAG), as we go from an input to an output.
-In this case we go from Customer raising a complaint or greivance and the output of the same would be either a ticket raised or 
-directing a customer to getting a call from a human agent, etc.
+## Start the console
 
-## Directed Acyclic Graph (DAG)
-We use a Directed Acyclic graph concept to design our customer support chatbot. A DAG is used to move from one state to the next
+Use Python 3.10 or newer from the repository root:
 
-### Nodes
-- They are conversational checkpoints where user and agent interact
-### Edges
-- Serve as Validation gateway. They decide if the user can advance to the next step
+    pip install -r requirements-demo.txt
+    streamlit run app.py
 
-### Customer Support Workflow
-- Customer support process is made up of different steps usually performed by different agents
-![alt text](https://github.com/ranjeetsn/twitter_llm_response_project/blob/main/readme_files/customer_support_app_wokflow.png)
+The app opens with three sample cases. You can paste a message into the inbox or import up to 100 rows from a CSV with a message, text, tweet, content, or full_text column. The review queue supports approve or reject, and the activity tab shows a downloadable log.
 
-- The DAG for the customer support flow is as shown below:
-![alt text](https://github.com/ranjeetsn/twitter_llm_response_project/blob/main/readme_files/dag_workflow.png)
+## Demo boundaries
 
+- Replies remain local drafts until a reviewer approves the exact proposed action.
+- Refunds require approval; deletion and unknown actions are blocked.
+- Approvals are short-lived and single-use in the safety gate.
+- The category and priority hints use simple keywords, and the support agent is deterministic.
+- Cases, approvals, mock actions, and activity are kept in the current Streamlit session only.
+- The demo operator is fixed for demonstration; it is not authentication.
+- Nothing is sent to X/Twitter, a paid LLM, Kafka, or a payment provider. No API credentials are needed.
 
+## Safety demo from the command line
 
+    python -m safety_gate.demo
+    python -m unittest safety_gate.test_gate safety_gate.test_workflow -v
 
-## ReplyGuard: Mock End-to-End Safety for Support Agents
+See safety_gate/README.md for the safety-gate design, test coverage, and production limitations.
 
-ReplyGuard simulates the safety-relevant support flow from complaint intake through an agent proposal, a fail-closed policy gate, human review, mock execution, and audit. Public replies and refunds require short-lived approval bound to the exact action; unsupported actions are denied. It uses deterministic scenarios and mock services, with no paid LLM, live X/Twitter, Kafka, or payment connection.
+## Original project work
 
-Run `python -m safety_gate.demo` and `python -m unittest safety_gate.test_gate safety_gate.test_workflow -v`. See [safety_gate/README.md](safety_gate/README.md) for the design, reproducible steps, test coverage, submission description, and limitations.
+The older notebooks contain experiments for airline-tweet classification, zero-shot complaint classification, a support-flow DAG, retrieval-augmented help-center answers, call transcription, and Kafka/social-streaming ideas. They are research prototypes and are not wired into this console. The Streamlit app intentionally uses a deterministic mock agent so the safety workflow is free to run and has no live side effects.
+
+Previous credentials committed in the repository have been revoked. The demo does not use them.

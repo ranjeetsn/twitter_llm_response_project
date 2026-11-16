@@ -52,12 +52,14 @@ OpenAI mode is opt-in. Each queued or retried post can make a paid API call, and
 
 ## Supporting evidence
 
-The command-line demo and unit tests exercise the safety-gate behavior without paid model calls or live external services:
+The repository documents a command-line demo and unit tests for the safety gate. Run them from the repository root with:
 
     python -m safety_gate.demo
     python -m unittest safety_gate.test_gate safety_gate.test_workflow -v
 
-The documented scenarios include a human-approved mock reply and refund; missing, expired, altered, replayed, or unauthorized approvals; prompt injection attempting to trigger a refund or deletion; malformed refund requests; and unknown action types. Expected behavior is that valid approved actions are recorded by the mock executor, while unapproved or unsupported effects remain blocked. The tests and detailed scenario descriptions are in `safety_gate/test_gate.py`, `safety_gate/test_workflow.py`, and [the safety-gate design README](safety_gate/README.md).
+The safety-gate documentation describes scenarios covering a human-approved mock reply and refund; missing, expired, altered, replayed, or unauthorized approvals; prompt injection attempting to trigger a refund or deletion; malformed refund requests; and unknown action types. It describes the expected behavior: valid approved actions are recorded by the mock executor, while unapproved or unsupported effects remain blocked. See `safety_gate/test_gate.py`, `safety_gate/test_workflow.py`, and [the safety-gate design README](safety_gate/README.md) for the documented coverage and demo details.
+
+This section describes documented scenarios and expected behavior; it does not report a verified test run, pass count, or measured success rate.
 
 ## Limitations
 

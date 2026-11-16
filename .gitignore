@@ -1,12 +1,18 @@
-# Ignore the .env files
+# Ignore local credentials and editor/runtime files
 .env*
 .ipynb_checkpoints*
+__pycache__/
+.venv/
+*.py[cod]
 
-# Ignore specific files
+# Ignore the generated local pipeline database (keep data/ source files)
+data/replyguard.sqlite3
+data/replyguard.sqlite3-shm
+data/replyguard.sqlite3-wal
+
+# Existing local-only project files
 big_query_table_truth_social.json
 marine-embassy-416705-19cd2730e55e.json
-
-# Ignore specific directories
 my_packages_2.zip
 my_packages
 my_packages_2 2/

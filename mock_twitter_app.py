@@ -25,6 +25,26 @@ def main() -> None:
     with st.form("compose-post", clear_on_submit=True):
         handle = st.text_input("Handle", value="@demo_user", max_chars=64)
         text = st.text_area("What’s happening?", max_chars=280, height=120)
+        st.caption("Optional simulated account signals for the triage demo; no social-media API is used.")
+        audience_col, activity_col = st.columns(2)
+        with audience_col:
+            followers = st.number_input(
+                "Estimated followers",
+                min_value=0,
+                max_value=100_000_000,
+                value=0,
+                step=1_000,
+                help="Synthetic input used as a rough potential-reach proxy. Leave 0 when unknown.",
+            )
+        with activity_col:
+            engagements = st.number_input(
+                "Engagements in the last hour",
+                min_value=0,
+                max_value=100_000_000,
+                value=0,
+                step=10,
+                help="Synthetic input for recent attention; this is not fetched from a platform.",
+            )
         submitted = st.form_submit_button("Post to local queue", type="primary", use_container_width=True)
 
     if submitted:
@@ -35,6 +55,8 @@ def main() -> None:
                 "tweet_id": str(uuid.uuid4()),
                 "text": text.strip(),
                 "author_handle": handle.strip() or "@demo_user",
+                "author_followers": int(followers),
+                "engagements_last_hour": int(engagements),
                 "created_at": datetime.now(timezone.utc).isoformat(),
             }
             try:
@@ -56,6 +78,10 @@ def main() -> None:
             status = post["response_status"] or post["tweet_status"]
             with st.container():
                 st.markdown(f"**{post['author_handle']}** · {post['created_at']} · `{status}`")
+                st.caption(
+                    f"Simulated reach: {post['author_followers']:,} followers · "
+                    f"recent activity: {post['engagements_last_hour']:,} engagements/hour"
+                )
                 st.write(post["text"])
                 if post["draft_text"]:
                     st.caption("Suggested reply draft (not posted):")

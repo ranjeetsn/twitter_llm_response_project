@@ -6,6 +6,7 @@ as audience size and recent engagement are synthetic in the mock UI.
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 
@@ -76,8 +77,12 @@ def _count(value: Any) -> int:
 
 
 def _matches(text: str, phrases: tuple[str, ...]) -> list[str]:
-    normalized = f" {text.casefold()} "
-    return [phrase for phrase in phrases if f" {phrase} " in normalized]
+    normalized = str(text or "").casefold()
+    return [
+        phrase
+        for phrase in phrases
+        if re.search(rf"(?<!\\w){re.escape(phrase)}(?!\\w)", normalized)
+    ]
 
 
 def _reach_bucket(followers: int) -> tuple[int, str]:

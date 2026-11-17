@@ -9,6 +9,7 @@ from __future__ import annotations
 import csv
 import hashlib
 import io
+import unittest
 from datetime import datetime, timezone
 
 import streamlit as st
@@ -50,11 +51,121 @@ SEED_MESSAGES = (
 )
 
 
+SAFETY_TEST_CASES = (
+    {
+        "id": "local-draft",
+        "suite": "Action gate",
+        "test_class": "ActionGateTests",
+        "method": "test_local_draft_executes_without_approval",
+        "title": "A local draft needs no external-action approval",
+        "description": "Confirms a draft can be saved by the mock executor without an approval token because it has no external side effect.",
+    },
+    {
+        "id": "public-reply-hold",
+        "suite": "Action gate",
+        "test_class": "ActionGateTests",
+        "method": "test_public_post_is_held_without_approval",
+        "title": "A public reply is held without approval",
+        "description": "Confirms a proposed public reply remains pending and the executor records no reply when approval is missing.",
+    },
+    {
+        "id": "exact-approval-once",
+        "suite": "Action gate",
+        "test_class": "ActionGateTests",
+        "method": "test_approved_exact_action_executes_once",
+        "title": "Exact approval executes once; token replay is blocked",
+        "description": "Confirms the approved proposal executes once, a replay of the same token is blocked, and audit metadata omits the reply text.",
+    },
+    {
+        "id": "changed-payload",
+        "suite": "Action gate",
+        "test_class": "ActionGateTests",
+        "method": "test_changed_payload_cannot_use_old_approval",
+        "title": "An edited reply cannot reuse an old approval",
+        "description": "Changes the public-reply payload after approval and confirms the old approval no longer authorizes execution.",
+    },
+    {
+        "id": "expired-approval",
+        "suite": "Action gate",
+        "test_class": "ActionGateTests",
+        "method": "test_expired_approval_fails_closed",
+        "title": "An expired approval fails closed",
+        "description": "Attempts execution at the five-minute expiry boundary and confirms the public action is blocked.",
+    },
+    {
+        "id": "approver-identity",
+        "suite": "Action gate",
+        "test_class": "ActionGateTests",
+        "method": "test_unauthorized_and_self_approval_are_rejected",
+        "title": "Unknown and self-approvers are rejected",
+        "description": "Confirms an unlisted operator cannot approve and the requester cannot approve their own action.",
+    },
+    {
+        "id": "delete-denied",
+        "suite": "Action gate",
+        "test_class": "ActionGateTests",
+        "method": "test_unsupported_delete_is_denied_even_if_approval_is_attempted",
+        "title": "Deletion stays blocked even if approval is attempted",
+        "description": "Confirms deletion is outside the allowed action set, cannot receive an approval, and never reaches the executor.",
+    },
+    {
+        "id": "injection-no-approval",
+        "suite": "Action gate",
+        "test_class": "ActionGateTests",
+        "method": "test_prompt_injection_in_context_does_not_grant_approval",
+        "title": "Prompt injection cannot grant a refund approval",
+        "description": "Adds customer text claiming approval and instructing the agent to ignore policy; the refund still requires a real approval.",
+    },
+    {
+        "id": "malformed-refund",
+        "suite": "Action gate",
+        "test_class": "ActionGateTests",
+        "method": "test_malformed_refund_is_denied",
+        "title": "A malformed refund amount is denied",
+        "description": "Supplies the refund amount as a string instead of integer cents and confirms the request is blocked.",
+    },
+    {
+        "id": "unknown-action",
+        "suite": "Action gate",
+        "test_class": "ActionGateTests",
+        "method": "test_unknown_action_is_denied_by_default",
+        "title": "An unknown action is denied by default",
+        "description": "Proposes an unsupported send-email action and confirms the default-deny policy prevents execution.",
+    },
+    {
+        "id": "delivery-workflow",
+        "suite": "End-to-end workflow",
+        "test_class": "SupportWorkflowTests",
+        "method": "test_delivery_case_requires_approval_before_public_reply",
+        "title": "A delivery reply waits for human approval",
+        "description": "Runs a delivery complaint through the workflow: the local draft is saved, the public reply waits, then one mock reply is recorded after approval.",
+    },
+    {
+        "id": "refund-workflow",
+        "suite": "End-to-end workflow",
+        "test_class": "SupportWorkflowTests",
+        "method": "test_refund_is_mocked_and_runs_only_after_human_approval",
+        "title": "A refund is recorded only after approval",
+        "description": "Confirms no refund is recorded before review and exactly one mock refund is recorded after human approval.",
+    },
+    {
+        "id": "injection-workflow",
+        "suite": "End-to-end workflow",
+        "test_class": "SupportWorkflowTests",
+        "method": "test_injection_cannot_approve_refund_or_enable_delete",
+        "title": "Injected refund and delete requests remain controlled",
+        "description": "Runs a malicious complaint through the workflow: reply/refund proposals remain pending, deletion is blocked, and no mock public reply or refund is recorded.",
+    },
+)
+
+
 def _now() -> datetime:
     return datetime.now(timezone.utc)
 
 
 def _initialize() -> None:
+    if "safety_test_reports" not in st.session_state:
+        st.session_state["safety_test_reports"] = {}
     if "workflow" in st.session_state:
         return
 
@@ -484,6 +595,107 @@ def _render_pipeline_monitor() -> None:
     live_view()
 
 
+def _run_safety_tests(test_ids: set[str]) -> dict[str, object]:
+    """Run selected deterministic unit tests against fresh in-memory mock objects."""
+    try:
+        from safety_gate.test_gate import ActionGateTests
+        from safety_gate.test_workflow import SupportWorkflowTests
+
+        test_classes = {
+            "ActionGateTests": ActionGateTests,
+            "SupportWorkflowTests": SupportWorkflowTests,
+        }
+        selected = [case for case in SAFETY_TEST_CASES if case["id"] in test_ids]
+        if not selected:
+            return {
+                "tests_run": 0,
+                "passed": 0,
+                "failures": 0,
+                "errors": 1,
+                "skipped": 0,
+                "success": False,
+                "output": "No matching safety tests were selected.",
+            }
+        suite = unittest.TestSuite(
+            test_classes[case["test_class"]](case["method"])
+            for case in selected
+        )
+        output = io.StringIO()
+        result = unittest.TextTestRunner(stream=output, verbosity=2).run(suite)
+        failed = len(result.failures)
+        errors = len(result.errors)
+        skipped = len(result.skipped)
+        return {
+            "tests_run": result.testsRun,
+            "passed": result.testsRun - failed - errors - skipped,
+            "failures": failed,
+            "errors": errors,
+            "skipped": skipped,
+            "success": result.wasSuccessful(),
+            "output": output.getvalue(),
+        }
+    except Exception as exc:
+        return {
+            "tests_run": 0,
+            "passed": 0,
+            "failures": 0,
+            "errors": 1,
+            "skipped": 0,
+            "success": False,
+            "output": f"Test runner could not start: {type(exc).__name__}: {exc}",
+        }
+
+
+def _show_safety_test_report(report: dict[str, object]) -> None:
+    tests_run = int(report["tests_run"])
+    passed = int(report["passed"])
+    failures = int(report["failures"])
+    errors = int(report["errors"])
+    skipped = int(report["skipped"])
+    if bool(report["success"]):
+        st.success(f"Completed: {passed}/{tests_run} tests passed.")
+    else:
+        st.error(
+            f"Completed: {passed}/{tests_run} passed · "
+            f"{failures} failed · {errors} errors · {skipped} skipped."
+        )
+    st.code(str(report["output"]) or "No test output.", language="text")
+
+
+def _render_safety_test_lab() -> None:
+    st.markdown("### Run safety tests")
+    st.caption(
+        "These deterministic tests use fresh in-memory approval/workflow objects and a mock executor. "
+        "They do not send posts, issue payments, call OpenAI, or use Kafka."
+    )
+    st.info(
+        "The suite checks authorization behavior, not whether an LLM response is accurate or safe in every context. "
+        "It does not test production authentication or the Kafka/SQLite pipeline."
+    )
+
+    reports = st.session_state["safety_test_reports"]
+    all_test_ids = {case["id"] for case in SAFETY_TEST_CASES}
+    if st.button(
+        f"Run all {len(SAFETY_TEST_CASES)} safety tests",
+        key="run-all-safety-tests",
+        type="primary",
+    ):
+        reports["all"] = _run_safety_tests(all_test_ids)
+    if "all" in reports:
+        st.markdown("#### Latest full-suite result")
+        _show_safety_test_report(reports["all"])
+
+    st.markdown("#### Run an individual test")
+    for number, case in enumerate(SAFETY_TEST_CASES, start=1):
+        with st.expander(f"{number}. {case['title']}"):
+            st.caption(f"{case['suite']} · {case['method']}")
+            st.write(case["description"])
+            if st.button("Run this test", key=f"run-safety-test-{case['id']}"):
+                reports[case["id"]] = _run_safety_tests({case["id"]})
+            if case["id"] in reports:
+                _show_safety_test_report(reports[case["id"]])
+
+
 def _render_openai_settings() -> None:
     st.markdown("#### Optional OpenAI drafts")
     try:
@@ -613,8 +825,8 @@ def main() -> None:
                 del st.session_state[key]
             st.rerun()
 
-    inbox_tab, review_tab, activity_tab, pipeline_tab = st.tabs(
-        ["Inbox", "Review queue", "Activity log", "Kafka inbox"]
+    inbox_tab, review_tab, activity_tab, pipeline_tab, safety_test_tab = st.tabs(
+        ["Inbox", "Review queue", "Activity log", "Kafka inbox", "Safety test lab"]
     )
 
     with inbox_tab:
@@ -670,6 +882,9 @@ def main() -> None:
         st.markdown("### Local Kafka → SQLite pipeline")
         st.caption("This view refreshes every five seconds. Replies are drafts until the safety gate approves them.")
         _render_pipeline_monitor()
+
+    with safety_test_tab:
+        _render_safety_test_lab()
 
     st.divider()
     st.caption(

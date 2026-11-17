@@ -81,7 +81,7 @@ def _matches(text: str, phrases: tuple[str, ...]) -> list[str]:
     return [
         phrase
         for phrase in phrases
-        if re.search(rf"(?<!\\w){re.escape(phrase)}(?!\\w)", normalized)
+        if re.search(rf"(?<!\w){re.escape(phrase)}(?!\w)", normalized)
     ]
 
 

@@ -32,6 +32,8 @@ def ensure_database() -> None:
                 tweet_id TEXT PRIMARY KEY,
                 text TEXT NOT NULL,
                 author_handle TEXT NOT NULL,
+                author_followers INTEGER NOT NULL DEFAULT 0,
+                engagements_last_hour INTEGER NOT NULL DEFAULT 0,
                 created_at TEXT NOT NULL,
                 received_at TEXT NOT NULL,
                 status TEXT NOT NULL,
@@ -60,6 +62,15 @@ def ensure_database() -> None:
                 ON activity(occurred_at DESC);
             """
         )
+        columns = {row["name"] for row in connection.execute("PRAGMA table_info(tweets)")}
+        if "author_followers" not in columns:
+            connection.execute(
+                "ALTER TABLE tweets ADD COLUMN author_followers INTEGER NOT NULL DEFAULT 0"
+            )
+        if "engagements_last_hour" not in columns:
+            connection.execute(
+                "ALTER TABLE tweets ADD COLUMN engagements_last_hour INTEGER NOT NULL DEFAULT 0"
+            )
     finally:
         connection.close()
 
@@ -71,11 +82,20 @@ def _event(connection: sqlite3.Connection, tweet_id: str, event: str, details: s
     )
 
 
+def _safe_count(value: Any) -> int:
+    try:
+        return max(0, min(int(value or 0), 100_000_000))
+    except (TypeError, ValueError, OverflowError):
+        return 0
+
+
 def record_tweet(event: dict[str, Any]) -> bool:
     ensure_database()
     tweet_id = str(event["tweet_id"])
     text = str(event["text"])
     handle = str(event.get("author_handle") or "@demo_user")[:64]
+    followers = _safe_count(event.get("author_followers"))
+    engagements = _safe_count(event.get("engagements_last_hour"))
     created_at = str(event.get("created_at") or utc_now())
     received_at = utc_now()
     connection = _connect()
@@ -83,9 +103,10 @@ def record_tweet(event: dict[str, Any]) -> bool:
         with connection:
             cursor = connection.execute(
                 """INSERT OR IGNORE INTO tweets
-                   (tweet_id, text, author_handle, created_at, received_at, status)
-                   VALUES (?, ?, ?, ?, ?, 'received')""",
-                (tweet_id, text, handle, created_at, received_at),
+                   (tweet_id, text, author_handle, author_followers, engagements_last_hour,
+                    created_at, received_at, status)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, 'received')""",
+                (tweet_id, text, handle, followers, engagements, created_at, received_at),
             )
             if cursor.rowcount:
                 _event(connection, tweet_id, "tweet_received", "Stored from incoming Kafka topic")
@@ -235,7 +256,8 @@ def list_tweets(limit: int = 100) -> list[dict[str, Any]]:
     connection = _connect()
     try:
         rows = connection.execute(
-            """SELECT t.tweet_id, t.text, t.author_handle, t.created_at, t.received_at,
+            """SELECT t.tweet_id, t.text, t.author_handle, t.author_followers,
+                      t.engagements_last_hour, t.created_at, t.received_at,
                       t.status AS tweet_status, t.error,
                       r.draft_text, r.model_name, r.created_at AS response_created_at,
                       r.status AS response_status, r.reviewed_by, r.reviewed_at, r.review_note

@@ -77,7 +77,11 @@ You can also run the same tests from the repository root:
 12. `test_refund_is_mocked_and_runs_only_after_human_approval` — No refund is recorded before review; approval records one mock refund.
 13. `test_injection_cannot_approve_refund_or_enable_delete` — A malicious request leaves reply/refund pending, blocks deletion, and records no public reply or refund.
 
-These descriptions explain the intended assertions; only the test output shown after a run is evidence of the current pass/fail result.
+These descriptions explain the assertions covered by the suite. The recorded result below reflects one local run, not a guarantee for future code revisions.
+
+### Recorded run
+
+- 2026-11-17: 13 of 13 tests passed in the app's Safety test lab (manual result reported by the project owner).
 
 ## Limitations
 

@@ -81,7 +81,7 @@ These descriptions explain the assertions covered by the suite. The recorded res
 
 ### Recorded run
 
-- 2026-11-17: 13 of 13 tests passed in the app's Safety test lab (manual result reported by the project owner).
+- 2026-11-17: 13 of 13 tests passed in the app's Safety test lab.
 
 ## Limitations
 

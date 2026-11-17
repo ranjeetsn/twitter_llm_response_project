@@ -52,14 +52,32 @@ OpenAI mode is opt-in. Each queued or retried post can make a paid API call, and
 
 ## Supporting evidence
 
-The repository documents a command-line demo and unit tests for the safety gate. Run them from the repository root with:
+The social-care console includes a **Safety test lab** tab. Start the app, open that tab, then choose **Run all 13 safety tests** or expand an individual test and click **Run this test**. The app displays the actual pass/fail/error counts and the Python unittest output from that run. Results are not prefilled.
+
+The test cases instantiate fresh in-memory approval/workflow objects and use `MockActionExecutor`. Running them does not contact X/Twitter, OpenAI, Kafka, or a payment provider, and does not modify the Kafka pipeline's SQLite records. They test the gate and simulated workflow; they do not test production authentication or whether generated replies are factually correct.
+
+You can also run the same tests from the repository root:
 
     python -m safety_gate.demo
     python -m unittest safety_gate.test_gate safety_gate.test_workflow -v
 
-The safety-gate documentation describes scenarios covering a human-approved mock reply and refund; missing, expired, altered, replayed, or unauthorized approvals; prompt injection attempting to trigger a refund or deletion; malformed refund requests; and unknown action types. It describes the expected behavior: valid approved actions are recorded by the mock executor, while unapproved or unsupported effects remain blocked. See `safety_gate/test_gate.py`, `safety_gate/test_workflow.py`, and [the safety-gate design README](safety_gate/README.md) for the documented coverage and demo details.
+### What the 13 tests check
 
-This section describes documented scenarios and expected behavior; it does not report a verified test run, pass count, or measured success rate.
+1. `test_local_draft_executes_without_approval` — A local draft is recorded without approval because it has no external effect.
+2. `test_public_post_is_held_without_approval` — A public reply without approval remains pending and is not recorded by the executor.
+3. `test_approved_exact_action_executes_once` — A matching approval permits one execution; replaying its token is blocked, and audit events omit reply text.
+4. `test_changed_payload_cannot_use_old_approval` — Editing the reply after approval invalidates that approval.
+5. `test_expired_approval_fails_closed` — An approval used at its five-minute expiry boundary is rejected.
+6. `test_unauthorized_and_self_approval_are_rejected` — An unknown operator and the requester themselves cannot approve the action.
+7. `test_unsupported_delete_is_denied_even_if_approval_is_attempted` — Deletion is outside the allowlist and stays blocked even if approval is requested.
+8. `test_prompt_injection_in_context_does_not_grant_approval` — Customer text claiming a refund is approved cannot grant authorization.
+9. `test_malformed_refund_is_denied` — A refund amount supplied as text instead of integer cents is rejected.
+10. `test_unknown_action_is_denied_by_default` — An unsupported action such as `send_email` is blocked.
+11. `test_delivery_case_requires_approval_before_public_reply` — A delivery reply is drafted locally, held for review, and recorded once only after approval.
+12. `test_refund_is_mocked_and_runs_only_after_human_approval` — No refund is recorded before review; approval records one mock refund.
+13. `test_injection_cannot_approve_refund_or_enable_delete` — A malicious request leaves reply/refund pending, blocks deletion, and records no public reply or refund.
+
+These descriptions explain the intended assertions; only the test output shown after a run is evidence of the current pass/fail result.
 
 ## Limitations
 

@@ -30,6 +30,7 @@ from replyguard_pipeline.credentials import (
     get_openai_settings,
     save_openai_settings,
 )
+from replyguard_pipeline.triage import recommend_triage
 from replyguard_pipeline.store import (
     decide_response,
     ensure_database,
@@ -470,9 +471,32 @@ def _render_pipeline_monitor() -> None:
             st.info("No Kafka posts have reached SQLite yet. Start the broker and workers, then post from Mock Twitter.")
             return
 
+        st.caption(
+            "Recommended review order uses severity wording, explicit urgency, simulated audience size, "
+            "and recent engagement. It is a heuristic aid: it never approves or posts a reply."
+        )
+        ranked_rows = [
+            (
+                recommend_triage(
+                    row["text"],
+                    author_followers=row["author_followers"],
+                    engagements_last_hour=row["engagements_last_hour"],
+                ),
+                row,
+            )
+            for row in rows
+        ]
+        ranked_rows.sort(key=lambda pair: pair[0]["score"], reverse=True)
+        rows = [row for _, row in ranked_rows]
+        triage_by_id = {row["tweet_id"]: recommendation for recommendation, row in ranked_rows}
+
         st.dataframe(
             [
                 {
+                    "Priority": triage_by_id[row["tweet_id"]]["priority"],
+                    "Score": triage_by_id[row["tweet_id"]]["score"],
+                    "Urgency": triage_by_id[row["tweet_id"]]["urgency"],
+                    "Potential reach": triage_by_id[row["tweet_id"]]["reach"],
                     "Handle": row["author_handle"],
                     "Post": row["text"],
                     "Status": row["response_status"] or row["tweet_status"],
@@ -498,6 +522,22 @@ def _render_pipeline_monitor() -> None:
         row = next(item for item in rows if item["tweet_id"] == selected_id)
         st.markdown(f"#### {row['author_handle']} · {row['tweet_id']}")
         st.info(row["text"])
+        recommendation = triage_by_id[selected_id]
+        metric_cols = st.columns(4)
+        metric_cols[0].metric("Recommended priority", recommendation["priority"])
+        metric_cols[1].metric("Triage score", f"{recommendation['score']} / 100")
+        metric_cols[2].metric("Urgency", recommendation["urgency"])
+        metric_cols[3].metric("Potential reach", recommendation["reach"])
+        st.caption(recommendation["next_step"])
+        with st.expander("Why was this post ranked here?"):
+            for signal in recommendation["signals"]:
+                st.write(f"• {signal}")
+            components = recommendation["components"]
+            st.caption(
+                "Score components (0–100): "
+                f"severity {components['severity']} · urgency {components['urgency']} · "
+                f"reach {components['reach']} · recent activity {components['velocity']}."
+            )
         status = row["response_status"] or row["tweet_status"]
         st.caption(f"Pipeline status: {status} · model: {row['model_name'] or 'waiting'}")
 

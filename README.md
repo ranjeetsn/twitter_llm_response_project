@@ -42,6 +42,25 @@ Then open the manager console sidebar, enter an OpenAI model ID and API key, and
 
 OpenAI mode is opt-in. Each queued or retried post can make a paid API call, and the post text is sent to OpenAI for draft generation. The model has no tools and cannot approve or post anything. Responses are accepted only when the API reports completion and the draft ends with punctuation; incomplete drafts are marked failed instead of entering review. Clear the saved settings in the manager sidebar to return to the free mock responder. Environment-variable configuration remains supported for terminal-only use.
 
+## Risk-aware triage recommender (experimental branch)
+
+This branch adds a transparent triage aid to the Kafka inbox. It recommends which posts a social-media manager should inspect first, using four visible signals:
+
+- **Severity wording (40%)** — configured phrases for possible safety, security, privacy, fraud, payment, or service issues.
+- **Explicit urgency (25%)** — phrases such as “right now,” “today,” or “before my flight.”
+- **Potential reach (25%)** — a follower-count proxy entered in Mock Twitter.
+- **Recent attention (10%)** — synthetic engagements in the last hour.
+
+The manager inbox sorts posts by score and shows a priority band, the component values, and the matched reasons. A configured severe-harm/security signal has a score floor so that a low-reach account cannot bury a potentially serious report. The bands are **Urgent** (score 78+, or the severe-signal floor), **High** (score 58+ or high-severity wording), **Elevated** (score 35+), and **Routine** (below 35).
+
+Reach and engagement values are optional synthetic demo inputs; the app does not fetch social-media data. Existing database rows and tweets without these fields are treated as having unknown reach and no recent activity. The SQLite setup adds the new columns automatically while retaining existing rows.
+
+This is a review-order recommendation only. It does not approve, reject, or publish a reply, and it does not currently stop routine or unrelated posts from entering the existing draft-generation queue. The normal human approval gate still applies to every public reply.
+
+### Triage limitations
+
+The prototype uses fixed English phrase lists and simple score weights, not a trained classifier or validated impact model. It can miss sarcasm, indirect language, new terms, and non-English posts, and can overreact to phrases used figuratively or in a negated sentence. Follower count and recent engagement are rough visibility proxies; they do not establish credibility, harm, or importance. The weights and thresholds need evaluation against labeled examples and review by social-care operators before any real use.
+
 ## Safety approach
 
 - Public replies require a short-lived, single-use approval bound to the exact text and post.
@@ -89,6 +108,7 @@ These descriptions explain the assertions covered by the suite. The recorded res
 - Category and priority hints are keyword-based. The older notebooks contain classification and RAG experiments, but they are not wired into the local pipeline.
 - The demo operator is fixed and is not authenticated. Approval state and audit state are local and are not tamper-proof or durable production records.
 - The safety gate controls authorization, not factual accuracy or reply quality. A human can still approve a bad reply.
+- The experimental triage branch uses an unvalidated phrase-based score and synthetic audience signals. It only sorts the manager queue; every post still enters the draft-generation path.
 - No live X/Twitter or payment provider is used. OpenAI is called only after explicit configuration, and post text is sent for draft generation.
 - Production use would require authenticated approver identity, durable atomic approval-token consumption, tamper-evident audit storage, and enforcement that leaves no alternate path to external side effects.
 

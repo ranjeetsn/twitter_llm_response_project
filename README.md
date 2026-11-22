@@ -102,6 +102,10 @@ These descriptions explain the assertions covered by the suite. The recorded res
 
 - 2026-11-17: 13 of 13 tests passed in the app's Safety test lab.
 
+## Demo video
+
+[Watch the ReplyGuard demo](https://youtu.be/akQFezkyAmc?si=n5SqDZ1iCSUlt8LF)
+
 ## Limitations
 
 - The response worker uses a deterministic mock responder by default. Optional OpenAI mode drafts text only; the safety-gate demo uses a deterministic agent stand-in.
